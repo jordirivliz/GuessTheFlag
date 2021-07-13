@@ -7,6 +7,39 @@
 
 import SwiftUI
 
+// Image modifier
+struct ImageModifier: ViewModifier{
+
+    func body(content: Content) -> some View {
+        content
+        // Make images round
+        .clipShape(Capsule())
+        // Put a black line around the image
+        .overlay(Capsule().stroke(Color.black, lineWidth: 1))
+        .shadow(color: .black, radius: 2)
+    }
+}
+// Text Modifier
+struct LargeRed: ViewModifier {
+    func body(content: Content) -> some View{
+       content
+        // Make country larger in font
+        .font(.largeTitle)
+        // Make color red
+        .foregroundColor(.red)
+        .frame(width: UIScreen.main.bounds.width)
+    }
+}
+
+extension View{
+    func largeRed() -> some View {
+        self.modifier(LargeRed())
+        }
+    func imageModifier() -> some View {
+            self.modifier(ImageModifier())
+        }
+}
+
 struct ContentView: View {
     // Array of countries that we have the flags for
     // Use shuffle to randomize the game
@@ -22,6 +55,16 @@ struct ContentView: View {
     // Score of the user
     @State private var score = 0
     
+    // Selection of the user
+    @State private var userTapped = 0
+
+    // Properties for the animation
+    @State private var animationAmount = 0.0
+    @State private var opacity = 1.0
+    @State private var offset = CGFloat.zero
+    
+    @State private var disabled = false
+    
     var body: some View {
         // Use ZStack to put color in the backgorung to better see the white of the flags
         ZStack {
@@ -34,35 +77,65 @@ struct ContentView: View {
                     Text("Tab the flag of:")
                         // Letters in white
                         .foregroundColor(.white)
-                    Text(countries[correctAnswer])
-                        .foregroundColor(.white)
-                        // Make country larger in font
+                        // Add space between the top and the text
+                        .padding(.top, 50)
+                        // Change font of letters
                         .font(.largeTitle)
+                    Text(countries[correctAnswer])
                         // Make country thicker
                         .fontWeight(.black)
+                        // Use text modifier
+                        .largeRed()
                 }
-                
                 ForEach(0..<3) { number in
                     Button(action: {
                         // Flag was tapped
                         self.flagTapped(number)
+                        self.userTapped = number
+                        
+                        // Animate the flag if the answer was correct
+                        if number == self.correctAnswer {
+                            // Create the animation
+                            withAnimation(.easeInOut(duration: 2)) {
+                                self.animationAmount += 360
+                                self.opacity -= 0.75
+                            }
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 2)
+                            {self.askQuestion()}
+                        } else {
+                            withAnimation(.easeInOut(duration: 0.5)) {
+                                self.offset = 200
+                            }
+                        }
+                        self.disabled = true
                     }) {
                         Image(self.countries[number])
                             // Render the original image pixels
                             // Rather than recolor them as a button
                             .renderingMode(.original)
-                            // Make images round
-                            .clipShape(Capsule())
-                            // Put a black line around the image
-                            .overlay(Capsule().stroke(Color.black, lineWidth: 1))
-                            .shadow(color: .black, radius: 2)
+                            // Use image modifier
+                            .imageModifier()
                     }
+                    // Rotate 360 degrees on y axis if the answer was correct
+                    .rotation3DEffect(.degrees(animationAmount), axis: (x:0, y: self.userTapped == number ? 1 : 0, z:0))
+                    .offset(x: number != self.correctAnswer ? self.offset : .zero, y: .zero)
+                    .clipped()
+                    .opacity(number != self.userTapped ? self.opacity : 1.0)
+                    .disabled(self.disabled)
                 }
-                // Label for the user score
-                Text("Score: \(score)")
-                    .foregroundColor(.white)
                 // Put everything right undernith the top
                 Spacer()
+                // Label for the user's score
+                ZStack{
+                    // Create a red circle containing the score
+                    Color.red
+                    .clipShape(Circle())
+                    .frame(width: 150, height: 100)
+                    Text("\(score)")
+                }
+                // Modifiers for the score
+                .foregroundColor(.white)
+                .font(.largeTitle)
             }
         }
         // Creating alert
@@ -72,6 +145,7 @@ struct ContentView: View {
                   dismissButton: .default(Text("Continue")) {
                     // Continue the game with another quesiton
                     self.askQuestion()
+                    score = 0
                   })
         }
     }
@@ -82,12 +156,16 @@ struct ContentView: View {
             score += 1
         } else {
             scoreTitle = "Wrong! That's the flag of \(countries[number])"
-            score = 0
+            showingScore = true
         }
-        showingScore = true
     }
     // Function to continue the game
     func askQuestion(){
+        // Reset properties
+        self.disabled = false
+        self.opacity = 1
+        self.offset = .zero
+        
         // Shuffle the countries to get other flags
         countries.shuffle()
         correctAnswer = Int.random(in: 0...2)
@@ -99,4 +177,3 @@ struct ContentView_Previews: PreviewProvider {
         ContentView()
     }
 }
-
